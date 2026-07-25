@@ -4,7 +4,7 @@ from pathlib import Path
 from git import Repo
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,8 +45,8 @@ def get_repo_history(repo):
 logging.info("Processing git history")
 max_message_length = -1
 min_message_length = 100000
-oldest = None
-newest = None
+oldest = datetime.max.replace(tzinfo=timezone.utc)
+newest = datetime.min.replace(tzinfo=timezone.utc)
 
 authors = {}
 
@@ -57,16 +57,16 @@ for commit in repo.iter_commits():
     min_message_length = min(min_message_length, length)
     commit_time = commit.committed_datetime
     oldest = min(oldest, commit_time)
-    newest = min(newest, commit_time)
+    newest = max(newest, commit_time)
     author = commit.author.name
     try:
         authors[author] += 1
     except:
         authors[author] = 1
 
-
 logging.info(f"Minimum message length was {min_message_length}")
 logging.info(f"Maximum message length was {max_message_length}")
+logging.info(f"The oldest commit is {oldest}")
 
 top_authors = sorted(
     authors.items(),

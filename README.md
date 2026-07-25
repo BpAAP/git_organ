@@ -14,6 +14,6 @@ The play head travels from the beginning of the git history.
 
 1. The user passes a git url.
 2. The program clones the git repo in a special way to get only the history and none of the files: `git clone --filter=blob:none --no-checkout <repo>`
-3. Parse the repo history into a custom representation, a node-and-parent based data representation, which holds all the data from the git history needed to make the music.
+3. Parse repo, and sort into timeslots.
 4. make midi with mido module
 5. play with pygame

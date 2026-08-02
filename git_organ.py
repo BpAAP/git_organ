@@ -5,6 +5,7 @@ from git import Repo
 import os
 import shutil
 from datetime import datetime, timezone
+from mido import MidiFile, MidiTrack, Message
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,3 +74,71 @@ top_authors = sorted(
     key=lambda x: x[1],
     reverse=True
 )[:args.n-1]
+top_authors = [entry[0] for entry in top_authors]
+
+def map_to_track_id(author):
+    index = args.n
+    if author.name in top_authors:
+        index = top_authors.index(author.name)
+    return index   
+
+# Create a new MIDI file
+mid = MidiFile()
+
+# Add the number of instruments wanted
+# Plus one as a catch all
+instruments = [0, 24, 32, 40, 48, 56, 73, 80]
+for i in range(args.n+1):
+    mid.tracks.append(MidiTrack())
+    mid.tracks[i].append(Message('program_change', program=instruments[i%len(instruments)], channel=i, time=0))
+
+track_counters = []
+for _ in range(args.n+1):
+    track_counters.append(0)
+
+# MIDI note numbers for C major scale
+notes = [60, 62, 64, 65, 67, 69, 71, 72, 71, 69, 67, 65, 64, 62, 60]
+num_notes = len(notes)
+length_unit = 10
+timestep = 30
+
+logging.info("Generating track")
+hexsha = set()
+tick = [repo.head.commit]
+next_tick = []
+ts = 0
+while len(tick) > 0:
+    # Go though steps.
+    # For an example this needs to be recursive, for example:
+    # A -> B -> C -> D -> G -> H -> I -> J
+    #           \ -> E -> F         \ -> K
+    # So the notes starting together are:
+    # A, B, C, D+E, G+F, H, I, J+K
+    for commit in tick:
+        if commit.hexsha in hexsha:
+            continue
+        hexsha.add(commit.hexsha)
+
+        author = commit.author
+        track_i = map_to_track_id(author)
+
+        commit_len = len(commit.message)
+        normalized_len = (commit_len-min_message_length)/(1+max_message_length-min_message_length)
+        scaled_len = round(length_unit * (normalized_len+1))
+
+        note = track_counters[track_i]
+        track_counters[track_i] = (track_counters[track_i] + 1) % num_notes
+
+        mid.tracks[track_i].append(Message('note_on', note=notes[note], velocity=64, channel=track_i, time=ts))
+        mid.tracks[track_i].append(Message('note_off', note=notes[note], velocity=64, channel=track_i, time=ts+scaled_len))
+        print(ts, length_unit, scaled_len)
+        next_tick += commit.parents
+
+    ts += timestep
+    tick = next_tick
+    next_tick = []
+
+logging.info("Saving track")
+# Save the MIDI file
+mid.save('song.mid')
+logging.info("Done")
